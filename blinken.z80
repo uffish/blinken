@@ -1,25 +1,28 @@
             .ORG    0x8000 
-SEED:       DW      0xdead 
-SEED2:      DW      0xbeef 
-SEED3:      DW      0x3133 
-SEED4:      DW      0x7a5f 
-CYCLES:     DW      0xA000 
+SEED:       DW      0xadde 
+SEED2:      DW      0xefbe 
+SEED3:      DW      0x3331 
+SEED4:      DW      0x5f7a 
+PORT        EQU     0 
+CYCLES:     DW      0xA000 ; Default delay loop length
 LAST:       DB      0x00 
+CURR:       DB      0x00 
 MODE:       DB      0x02 
 ; MODE: Selected with buttons (when implemented)
 ; 0x01: Fast random flashes
 ; 0x02: Random flashes, random delays
-; 0x04: omg knight rider
-; 0x08:
-; 0x10:
+; 0x04: KITT
+; 0x08: Counter
+; 0x10: Cylon
 ; 0x20:
 ; 0x40:
-; 0x80: Reserved for exit
-PORT        EQU     0 
+; 0x80: Exit to monitor
+FLAGS:      DB      0x00 
+; Flags include:
+; 0x01: Current direction of chase (0=L, 1=R)
+
             .ORG    0x8100 
-START:               
-            CALL    begin 
-            RET      
+
 BEGIN:               
             CALL    modeselect 
             JP      begin 
@@ -40,14 +43,18 @@ MODESELECT:
             LD      a,port 
             LD      c,a 
             IN      a,(c) 
-            CALL    nz,setmode
+            CALL    nz,setmode 
             LD      a,(mode) 
             BIT     0,a 
             JP      nz,fastflash 
             BIT     1,a 
             JP      nz,standardflash 
             BIT     2,a 
-            JP      nz,knight 
+            JP      nz,kitt 
+            BIT     3,a 
+            JP      nz,counter 
+            BIT     4,a 
+            JP      nz,cylon 
             BIT     7,a 
             JP      nz,exit 
             RET      
@@ -56,7 +63,77 @@ SETMODE:
             LD      (mode),a 
 ; some mode specific setup
             BIT     2,a ; knight rider
-            JP      nz,knightsetup 
+            JP      nz,kittsetup 
+            BIT     3,a ; counter
+            JP      nz,countsetup 
+            BIT     4,a ; cylon
+            JP      nz,cylonsetup 
+            RET      
+
+COUNTER:             
+            LD      a,(last) 
+            CALL    write 
+            INC     a 
+            LD      (last),a 
+            LD      bc,0x1000 
+            CALL    delay 
+            RET      
+
+COUNTSETUP: LD      a,1 
+            LD      (last),a 
+            RET      
+
+CYLONSETUP:          
+            LD      a,(flags) 
+            SET     0,a 
+            LD      (flags),a 
+            LD      a,1 
+            LD      (last),a 
+            LD      hl,0x1000 
+            LD      (cycles),hl 
+            RET      
+
+
+CYLON:               
+            LD      a,(flags) 
+            LD      d,0x10 ; counter for PCM loop
+            BIT     0,a 
+            JP      nz,cylonright 
+            JP      cylonleft 
+CYLONLEFT:  LD      a,(last) 
+            RLCA     
+            LD      (curr),a 
+            JP      cylonpcm 
+CYLONRIGHT: LD      a,(last) 
+            RRCA     
+            LD      (curr),a 
+            JP      cylonpcm 
+CYLONPCM:   LD      a,(curr) 
+            LD      b,a 
+            LD      a,(last) 
+            OR      b 
+            CALL    write 
+            LD      bc,0x0080 
+            CALL    delay 
+            LD      a,(curr) 
+            CALL    write 
+            LD      bc,0x0400 
+            CALL    delay 
+            DEC     d 
+            JP      nz,cylonpcm 
+            LD      a,(curr) 
+            LD      (last),a 
+; finally set the direction for next time
+            AND     $80 
+            JP      nz,nextright 
+            AND     $01 
+            JP      nz,nextleft 
+NEXTRIGHT:  LD      a,(flags) 
+            SET     0,a 
+            JP      cylondone 
+NEXTLEFT:   LD      a,(flags) 
+            RES     0,a 
+CYLONDONE:  LD      (flags),a 
             RET      
 
 STANDARDFLASH:       
@@ -67,17 +144,17 @@ STANDARDFLASH:
             CALL    randomisedelay 
             RET      
 
-KNIGHT:              
-            LD      a,(last)
-            RRCA    
-            LD      (last),a
-            CALL    write
-            LD      bc,0x3000
-            CALL    delay
+KITT:                
+            LD      a,(last) 
+            RRCA     
+            LD      (last),a 
+            CALL    write 
+            LD      bc,0x3000 
+            CALL    delay 
             RET      
 
-KNIGHTSETUP:         
-            LD      a,0x03 
+KITTSETUP:           
+            LD      a,3 
             LD      (last),a 
             RET      
 
@@ -89,10 +166,14 @@ FASTFLASH:
             CALL    delay 
             RET      
 
-WRITE:      LD      b,a ;writes value of A to LEDs
+WRITE:      PUSH    af 
+            PUSH    bc 
+            LD      b,a ;writes value of A to LEDs
             LD      a,port 
             LD      c,a 
             OUT     (c),b 
+            POP     bc 
+            POP     af 
             RET      
 
 RANDOMISEDELAY:      
@@ -100,14 +181,13 @@ RANDOMISEDELAY:
             LD      (cycles),a 
             CALL    RandLFSR 
             LD      b,a 
-            SRL     b ; shift right to keep things speedy
+            SRL     b ; keep things speedy
             LD      a,b 
             LD      (cycles+1),a 
             RET      
 
 DELAY:               ;preload BC with desired number of cycles
             BIT     0,a ; the most expensive instruction we could find :)
-            BIT     0,a 
             BIT     0,a 
             AND     0xff 
             DEC     bc 
@@ -155,6 +235,18 @@ RANDLFSR:
             LDDR     
             LD      (de),a 
             RET      
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -1,204 +1,325 @@
 8000                          .ORG   0x8000   
-8000   AD DE        SEED:     DW   0xdead   
-8002   EF BE        SEED2:    DW   0xbeef   
-8004   33 31        SEED3:    DW   0x3133   
-8006   5F 7A        SEED4:    DW   0x7a5f   
-8008   00 A0        CYCLES:   DW   0xA000   
+8000   DE AD        SEED:     DW   0xadde   
+8002   BE EF        SEED2:    DW   0xefbe   
+8004   31 33        SEED3:    DW   0x3331   
+8006   7A 5F        SEED4:    DW   0x5f7a   
+8008                PORT:     EQU   0   
+8008   00 A0        CYCLES:   DW   0xA000   ; Default delay loop length
 800A   00           LAST:     DB   0x00   
-800B   02           MODE:     DB   0x02   
-800C                             ; MODE: Selected with buttons (when implemented)
-800C                             ; 0x01: Fast random flashes
-800C                             ; 0x02: Random flashes, random delays
-800C                             ; 0x04: omg knight rider
-800C                             ; 0x08:
-800C                             ; 0x10:
-800C                             ; 0x20:
-800C                             ; 0x40:
-800C                             ; 0x80: Reserved for exit
-800C                PORT:     EQU   0   
+800B   00           CURR:     DB   0x00   
+800C   02           MODE:     DB   0x02   
+800D                             ; MODE: Selected with buttons (when implemented)
+800D                             ; 0x01: Fast random flashes
+800D                             ; 0x02: Random flashes, random delays
+800D                             ; 0x04: KITT
+800D                             ; 0x08: Counter
+800D                             ; 0x10: Cylon
+800D                             ; 0x20:
+800D                             ; 0x40:
+800D                             ; 0x80: Exit to monitor
+800D   00           FLAGS:    DB   0x00   
+800E                             ; Flags include:
+800E                             ; 0x01: Current direction of chase (0=L, 1=R)
 8100                          .ORG   0x8100   
-8100                START:       
-8100   CD 04 81               CALL   begin   
-8103   C9                     RET      
-8104                BEGIN:       
-8104   CD 17 81               CALL   modeselect   
-8107   C3 04 81               JP   begin   
-810A                EXIT:        ; return to monitor
-810A   3E 00                  LD   a,port   
-810C   4F                     LD   c,a   
-810D   3E 00                  LD   a,0x00   
-810F   ED 79                  OUT   (c),a   
-8111   3E 01                  LD   a,0x01   
-8113   0E 00                  LD   c,0x00   
-8115   F7                     RST   0x0030   
-8116   C9                     RET      
-8117                             ;subroutines
-8117                MODESELECT:      
-8117   3E 00                  LD   a,port   
-8119   4F                     LD   c,a   
-811A   ED 78                  IN   a,(c)   
-811C   C4 37 81               CALL   nz,setmode   
-811F   3A 0B 80               LD   a,(mode)   
-8122   CB 47                  BIT   0,a   
-8124   C2 68 81               JP   nz,fastflash   
-8127   CB 4F                  BIT   1,a   
-8129   C2 40 81               JP   nz,standardflash   
-812C   CB 57                  BIT   2,a   
-812E   C2 51 81               JP   nz,knight   
-8131   CB 7F                  BIT   7,a   
-8133   C2 0A 81               JP   nz,exit   
-8136   C9                     RET      
-8137                SETMODE:      
-8137   32 0B 80               LD   (mode),a   
-813A                             ; some mode specific setup
-813A   CB 57                  BIT   2,a   ; knight rider
-813C   C2 62 81               JP   nz,knightsetup   
-813F   C9                     RET      
-8140                STANDARDFLASH:      
-8140   CD 9F 81               CALL   RandLFSR   
-8143   CD 78 81               CALL   write   
-8146   ED 4B 08 80            LD   bc,(cycles)   
-814A   CD 90 81               CALL   delay   
-814D   CD 7F 81               CALL   randomisedelay   
-8150   C9                     RET      
-8151                KNIGHT:      
-8151   3A 0A 80               LD   a,(last)   
-8154   0F                     RRCA      
-8155   32 0A 80               LD   (last),a   
-8158   CD 78 81               CALL   write   
-815B   01 00 20               LD   bc,0x2000   
-815E   CD 90 81               CALL   delay   
-8161   C9                     RET      
-8162                KNIGHTSETUP:      
-8162   3E 03                  LD   a,0x03   
-8164   32 0A 80               LD   (last),a   
-8167   C9                     RET      
-8168                FASTFLASH:      
-8168   CD 9F 81               CALL   RandLFSR   
-816B   32 0A 80               LD   (last),a   
-816E   CD 78 81               CALL   write   
-8171   01 00 10               LD   bc,0x1000   
-8174   CD 90 81               CALL   delay   
-8177   C9                     RET      
-8178   47           WRITE:    LD   b,a   ;writes value of A to LEDs
-8179   3E 00                  LD   a,port   
-817B   4F                     LD   c,a   
-817C   ED 41                  OUT   (c),b   
-817E   C9                     RET      
-817F                RANDOMISEDELAY:      
-817F   CD 9F 81               CALL   RandLFSR   
-8182   32 08 80               LD   (cycles),a   
-8185   CD 9F 81               CALL   RandLFSR   
-8188   47                     LD   b,a   
-8189   CB 38                  SRL   b   ; shift right to keep things speedy
-818B   78                     LD   a,b   
-818C   32 09 80               LD   (cycles+1),a   
-818F   C9                     RET      
-8190                DELAY:       ;preload BC with desired number of cycles
-8190   CB 47                  BIT   0,a   ; the most expensive instruction we could find :)
-8192   CB 47                  BIT   0,a   
-8194   CB 47                  BIT   0,a   
-8196   E6 FF                  AND   0xff   
-8198   0B                     DEC   bc   
-8199   79                     LD   a,c   
-819A   B0                     OR   b   
-819B   C2 90 81               JP   nz,delay   
-819E   C9                     RET      
-819F                RANDLFSR:      
-819F   21 04 80               LD   hl,seed+4   
-81A2   5E                     LD   e,(hl)   
-81A3   23                     INC   hl   
-81A4   56                     LD   d,(hl)   
-81A5   23                     INC   hl   
-81A6   4E                     LD   c,(hl)   
-81A7   23                     INC   hl   
-81A8   7E                     LD   a,(hl)   
-81A9   47                     LD   b,a   
-81AA   CB 13                  RL   e   
-81AC   CB 12                  RL   d   
-81AE   CB 11                  RL   c   
-81B0   17                     RLA      
-81B1   CB 13                  RL   e   
-81B3   CB 12                  RL   d   
-81B5   CB 11                  RL   c   
-81B7   17                     RLA      
-81B8   CB 13                  RL   e   
-81BA   CB 12                  RL   d   
-81BC   CB 11                  RL   c   
-81BE   17                     RLA      
-81BF   67                     LD   h,a   
-81C0   CB 13                  RL   e   
-81C2   CB 12                  RL   d   
-81C4   CB 11                  RL   c   
-81C6   17                     RLA      
-81C7   A8                     XOR   b   
-81C8   CB 13                  RL   e   
-81CA   CB 12                  RL   d   
-81CC   AC                     XOR   h   
-81CD   A9                     XOR   c   
-81CE   AA                     XOR   d   
-81CF   21 06 80               LD   hl,seed+6   
-81D2   11 07 80               LD   de,seed+7   
-81D5   01 07 00               LD   bc,7   
-81D8   ED B8                  LDDR      
-81DA   12                     LD   (de),a   
-81DB   C9                     RET      
+8100                BEGIN:       
+8100   CD 13 81               CALL   modeselect   
+8103   C3 00 81               JP   begin   
+8106                EXIT:        ; return to monitor
+8106   3E 00                  LD   a,port   
+8108   4F                     LD   c,a   
+8109   3E 00                  LD   a,0x00   
+810B   ED 79                  OUT   (c),a   
+810D   3E 01                  LD   a,0x01   
+810F   0E 00                  LD   c,0x00   
+8111   F7                     RST   0x0030   
+8112   C9                     RET      
+8113                             ;subroutines
+8113                MODESELECT:      
+8113   3E 00                  LD   a,port   
+8115   4F                     LD   c,a   
+8116   ED 78                  IN   a,(c)   
+8118   C4 3D 81               CALL   nz,setmode   
+811B   3A 0C 80               LD   a,(mode)   
+811E   CB 47                  BIT   0,a   
+8120   C2 06 82               JP   nz,fastflash   
+8123   CB 4F                  BIT   1,a   
+8125   C2 DE 81               JP   nz,standardflash   
+8128   CB 57                  BIT   2,a   
+812A   C2 EF 81               JP   nz,kitt   
+812D   CB 5F                  BIT   3,a   
+812F   C2 50 81               JP   nz,counter   
+8132   CB 67                  BIT   4,a   
+8134   C2 7B 81               JP   nz,cylon   
+8137   CB 7F                  BIT   7,a   
+8139   C2 06 81               JP   nz,exit   
+813C   C9                     RET      
+813D                SETMODE:      
+813D   32 0C 80               LD   (mode),a   
+8140                             ; some mode specific setup
+8140   CB 57                  BIT   2,a   ; knight rider
+8142   C2 00 82               JP   nz,kittsetup   
+8145   CB 5F                  BIT   3,a   ; counter
+8147   C2 61 81               JP   nz,countsetup   
+814A   CB 67                  BIT   4,a   ; cylon
+814C   C2 67 81               JP   nz,cylonsetup   
+814F   C9                     RET      
+8150                COUNTER:      
+8150   3A 0A 80               LD   a,(last)   
+8153   CD 16 82               CALL   write   
+8156   3C                     INC   a   
+8157   32 0A 80               LD   (last),a   
+815A   01 00 10               LD   bc,0x1000   
+815D   CD 32 82               CALL   delay   
+8160   C9                     RET      
+8161   3E 01        COUNTSETUP:   LD   a,1   
+8163   32 0A 80               LD   (last),a   
+8166   C9                     RET      
+8167                CYLONSETUP:      
+8167   3A 0D 80               LD   a,(flags)   
+816A   CB C7                  SET   0,a   
+816C   32 0D 80               LD   (flags),a   
+816F   3E 01                  LD   a,1   
+8171   32 0A 80               LD   (last),a   
+8174   21 00 10               LD   hl,0x1000   
+8177   22 08 80               LD   (cycles),hl   
+817A   C9                     RET      
+817B                CYLON:       
+817B   3A 0D 80               LD   a,(flags)   
+817E   16 10                  LD   d,0x10   ; counter for PCM loop
+8180   CB 47                  BIT   0,a   
+8182   C2 92 81               JP   nz,cylonright   
+8185   C3 88 81               JP   cylonleft   
+8188   3A 0A 80     CYLONLEFT:   LD   a,(last)   
+818B   07                     RLCA      
+818C   32 0B 80               LD   (curr),a   
+818F   C3 9C 81               JP   cylonpcm   
+8192   3A 0A 80     CYLONRIGHT:   LD   a,(last)   
+8195   0F                     RRCA      
+8196   32 0B 80               LD   (curr),a   
+8199   C3 9C 81               JP   cylonpcm   
+819C   3A 0B 80     CYLONPCM:   LD   a,(curr)   
+819F   47                     LD   b,a   
+81A0   3A 0A 80               LD   a,(last)   
+81A3   B0                     OR   b   
+81A4   CD 16 82               CALL   write   
+81A7   01 80 00               LD   bc,0x0080   
+81AA   CD 32 82               CALL   delay   
+81AD   3A 0B 80               LD   a,(curr)   
+81B0   CD 16 82               CALL   write   
+81B3   01 00 04               LD   bc,0x0400   
+81B6   CD 32 82               CALL   delay   
+81B9   15                     DEC   d   
+81BA   C2 9C 81               JP   nz,cylonpcm   
+81BD   3A 0B 80               LD   a,(curr)   
+81C0   32 0A 80               LD   (last),a   
+81C3                             ; finally set the direction for next time
+81C3   E6 80                  AND   $80   
+81C5   C2 CD 81               JP   nz,nextright   
+81C8   E6 01                  AND   $01   
+81CA   C2 D5 81               JP   nz,nextleft   
+81CD   3A 0D 80     NEXTRIGHT:   LD   a,(flags)   
+81D0   CB C7                  SET   0,a   
+81D2   C3 DA 81               JP   cylondone   
+81D5   3A 0D 80     NEXTLEFT:   LD   a,(flags)   
+81D8   CB 87                  RES   0,a   
+81DA   32 0D 80     CYLONDONE:   LD   (flags),a   
+81DD   C9                     RET      
+81DE                STANDARDFLASH:      
+81DE   CD 3F 82               CALL   RandLFSR   
+81E1   CD 16 82               CALL   write   
+81E4   ED 4B 08 80            LD   bc,(cycles)   
+81E8   CD 32 82               CALL   delay   
+81EB   CD 21 82               CALL   randomisedelay   
+81EE   C9                     RET      
+81EF                KITT:        
+81EF   3A 0A 80               LD   a,(last)   
+81F2   0F                     RRCA      
+81F3   32 0A 80               LD   (last),a   
+81F6   CD 16 82               CALL   write   
+81F9   01 00 30               LD   bc,0x3000   
+81FC   CD 32 82               CALL   delay   
+81FF   C9                     RET      
+8200                KITTSETUP:      
+8200   3E 03                  LD   a,3   
+8202   32 0A 80               LD   (last),a   
+8205   C9                     RET      
+8206                FASTFLASH:      
+8206   CD 3F 82               CALL   RandLFSR   
+8209   32 0A 80               LD   (last),a   
+820C   CD 16 82               CALL   write   
+820F   01 00 10               LD   bc,0x1000   
+8212   CD 32 82               CALL   delay   
+8215   C9                     RET      
+8216   F5           WRITE:    PUSH   af   
+8217   C5                     PUSH   bc   
+8218   47                     LD   b,a   ;writes value of A to LEDs
+8219   3E 00                  LD   a,port   
+821B   4F                     LD   c,a   
+821C   ED 41                  OUT   (c),b   
+821E   C1                     POP   bc   
+821F   F1                     POP   af   
+8220   C9                     RET      
+8221                RANDOMISEDELAY:      
+8221   CD 3F 82               CALL   RandLFSR   
+8224   32 08 80               LD   (cycles),a   
+8227   CD 3F 82               CALL   RandLFSR   
+822A   47                     LD   b,a   
+822B   CB 38                  SRL   b   ; keep things speedy
+822D   78                     LD   a,b   
+822E   32 09 80               LD   (cycles+1),a   
+8231   C9                     RET      
+8232                DELAY:       ;preload BC with desired number of cycles
+8232   CB 47                  BIT   0,a   ; the most expensive instruction we could find :)
+8234   CB 47                  BIT   0,a   
+8236   E6 FF                  AND   0xff   
+8238   0B                     DEC   bc   
+8239   79                     LD   a,c   
+823A   B0                     OR   b   
+823B   C2 32 82               JP   nz,delay   
+823E   C9                     RET      
+823F                RANDLFSR:      
+823F   21 04 80               LD   hl,seed+4   
+8242   5E                     LD   e,(hl)   
+8243   23                     INC   hl   
+8244   56                     LD   d,(hl)   
+8245   23                     INC   hl   
+8246   4E                     LD   c,(hl)   
+8247   23                     INC   hl   
+8248   7E                     LD   a,(hl)   
+8249   47                     LD   b,a   
+824A   CB 13                  RL   e   
+824C   CB 12                  RL   d   
+824E   CB 11                  RL   c   
+8250   17                     RLA      
+8251   CB 13                  RL   e   
+8253   CB 12                  RL   d   
+8255   CB 11                  RL   c   
+8257   17                     RLA      
+8258   CB 13                  RL   e   
+825A   CB 12                  RL   d   
+825C   CB 11                  RL   c   
+825E   17                     RLA      
+825F   67                     LD   h,a   
+8260   CB 13                  RL   e   
+8262   CB 12                  RL   d   
+8264   CB 11                  RL   c   
+8266   17                     RLA      
+8267   A8                     XOR   b   
+8268   CB 13                  RL   e   
+826A   CB 12                  RL   d   
+826C   AC                     XOR   h   
+826D   A9                     XOR   c   
+826E   AA                     XOR   d   
+826F   21 06 80               LD   hl,seed+6   
+8272   11 07 80               LD   de,seed+7   
+8275   01 07 00               LD   bc,7   
+8278   ED B8                  LDDR      
+827A   12                     LD   (de),a   
+827B   C9                     RET      
 
 
 SEED:               8000 DEFINED AT LINE 2
-                    > USED AT LINE 120
-                    > USED AT LINE 152
-                    > USED AT LINE 153
+                    > USED AT LINE 200
+                    > USED AT LINE 232
+                    > USED AT LINE 233
 SEED2:              8002 DEFINED AT LINE 3
 SEED3:              8004 DEFINED AT LINE 4
 SEED4:              8006 DEFINED AT LINE 5
-CYCLES:             8008 DEFINED AT LINE 6
-                    > USED AT LINE 65
-                    > USED AT LINE 100
-                    > USED AT LINE 105
-LAST:               800A DEFINED AT LINE 7
-                    > USED AT LINE 71
-                    > USED AT LINE 73
-                    > USED AT LINE 81
-                    > USED AT LINE 86
-MODE:               800B DEFINED AT LINE 8
-                    > USED AT LINE 44
-                    > USED AT LINE 56
-PORT:               0000 DEFINED AT LINE 18
-                    > USED AT LINE 28
-                    > USED AT LINE 40
-                    > USED AT LINE 93
-START:              8100 DEFINED AT LINE 20
-BEGIN:              8104 DEFINED AT LINE 23
-                    > USED AT LINE 21
-                    > USED AT LINE 25
-EXIT:               810A DEFINED AT LINE 27
-                    > USED AT LINE 52
-MODESELECT:         8117 DEFINED AT LINE 39
-                    > USED AT LINE 24
-SETMODE:            8137 DEFINED AT LINE 55
+PORT:               0000 DEFINED AT LINE 6
+                    > USED AT LINE 31
                     > USED AT LINE 43
-STANDARDFLASH:      8140 DEFINED AT LINE 62
-                    > USED AT LINE 48
-KNIGHT:             8151 DEFINED AT LINE 70
-                    > USED AT LINE 50
-KNIGHTSETUP:        8162 DEFINED AT LINE 79
-                    > USED AT LINE 59
-FASTFLASH:          8168 DEFINED AT LINE 84
-                    > USED AT LINE 46
-WRITE:              8178 DEFINED AT LINE 92
-                    > USED AT LINE 64
+                    > USED AT LINE 172
+CYCLES:             8008 DEFINED AT LINE 7
+                    > USED AT LINE 93
+                    > USED AT LINE 142
+                    > USED AT LINE 181
+                    > USED AT LINE 186
+LAST:               800A DEFINED AT LINE 8
                     > USED AT LINE 74
-                    > USED AT LINE 87
-RANDOMISEDELAY:     817F DEFINED AT LINE 98
-                    > USED AT LINE 67
-DELAY:              8190 DEFINED AT LINE 108
-                    > USED AT LINE 66
-                    > USED AT LINE 76
-                    > USED AT LINE 89
-                    > USED AT LINE 116
-RANDLFSR:           819F DEFINED AT LINE 119
+                    > USED AT LINE 77
+                    > USED AT LINE 83
+                    > USED AT LINE 91
+                    > USED AT LINE 103
+                    > USED AT LINE 107
+                    > USED AT LINE 113
+                    > USED AT LINE 125
+                    > USED AT LINE 148
+                    > USED AT LINE 150
+                    > USED AT LINE 158
+                    > USED AT LINE 163
+CURR:               800B DEFINED AT LINE 9
+                    > USED AT LINE 105
+                    > USED AT LINE 109
+                    > USED AT LINE 111
+                    > USED AT LINE 118
+                    > USED AT LINE 124
+MODE:               800C DEFINED AT LINE 10
+                    > USED AT LINE 47
                     > USED AT LINE 63
-                    > USED AT LINE 85
-                    > USED AT LINE 99
+FLAGS:              800D DEFINED AT LINE 20
+                    > USED AT LINE 87
+                    > USED AT LINE 89
+                    > USED AT LINE 98
+                    > USED AT LINE 131
+                    > USED AT LINE 134
+                    > USED AT LINE 136
+BEGIN:              8100 DEFINED AT LINE 26
+                    > USED AT LINE 28
+EXIT:               8106 DEFINED AT LINE 30
+                    > USED AT LINE 59
+MODESELECT:         8113 DEFINED AT LINE 42
+                    > USED AT LINE 27
+SETMODE:            813D DEFINED AT LINE 62
+                    > USED AT LINE 46
+COUNTER:            8150 DEFINED AT LINE 73
+                    > USED AT LINE 55
+COUNTSETUP:         8161 DEFINED AT LINE 82
+                    > USED AT LINE 68
+CYLONSETUP:         8167 DEFINED AT LINE 86
+                    > USED AT LINE 70
+CYLON:              817B DEFINED AT LINE 97
+                    > USED AT LINE 57
+CYLONLEFT:          8188 DEFINED AT LINE 103
+                    > USED AT LINE 102
+CYLONRIGHT:         8192 DEFINED AT LINE 107
                     > USED AT LINE 101
+CYLONPCM:           819C DEFINED AT LINE 111
+                    > USED AT LINE 106
+                    > USED AT LINE 110
+                    > USED AT LINE 123
+NEXTRIGHT:          81CD DEFINED AT LINE 131
+                    > USED AT LINE 128
+NEXTLEFT:           81D5 DEFINED AT LINE 134
+                    > USED AT LINE 130
+CYLONDONE:          81DA DEFINED AT LINE 136
+                    > USED AT LINE 133
+STANDARDFLASH:      81DE DEFINED AT LINE 139
+                    > USED AT LINE 51
+KITT:               81EF DEFINED AT LINE 147
+                    > USED AT LINE 53
+KITTSETUP:          8200 DEFINED AT LINE 156
+                    > USED AT LINE 66
+FASTFLASH:          8206 DEFINED AT LINE 161
+                    > USED AT LINE 49
+WRITE:              8216 DEFINED AT LINE 169
+                    > USED AT LINE 75
+                    > USED AT LINE 115
+                    > USED AT LINE 119
+                    > USED AT LINE 141
+                    > USED AT LINE 151
+                    > USED AT LINE 164
+RANDOMISEDELAY:     8221 DEFINED AT LINE 179
+                    > USED AT LINE 144
+DELAY:              8232 DEFINED AT LINE 189
+                    > USED AT LINE 79
+                    > USED AT LINE 117
+                    > USED AT LINE 121
+                    > USED AT LINE 143
+                    > USED AT LINE 153
+                    > USED AT LINE 166
+                    > USED AT LINE 196
+RANDLFSR:           823F DEFINED AT LINE 199
+                    > USED AT LINE 140
+                    > USED AT LINE 162
+                    > USED AT LINE 180
+                    > USED AT LINE 182
