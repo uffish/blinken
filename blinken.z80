@@ -11,16 +11,15 @@ MODE:       DB      0x02
 ; MODE: Selected with buttons (when implemented)
 ; 0x01: Fast random flashes
 ; 0x02: Random flashes, random delays
-; 0x04: KITT
+; 0x04: Cylon
 ; 0x08: Counter
-; 0x10: Cylon
+; 0x10: 
 ; 0x20:
 ; 0x40:
 ; 0x80: Exit to monitor
-;
-FLAGS:      DB      0x00 
-; Flags include:
-; 0x01: Current direction of chase (0=L, 1=R)
+
+DIRECTION:      DB      0x00 
+;  Current direction of chase (0=L, 1=R)
 
             .ORG    0x8100 
 
@@ -28,7 +27,7 @@ BEGIN:
             CALL    modeselect 
             JP      begin 
 
-EXIT:                ; return to monitor
+EXIT:               ; return to SCM
             LD      a,port 
             LD      c,a 
             LD      a,0x00 
@@ -37,8 +36,6 @@ EXIT:                ; return to monitor
             LD      c,0x00 
             RST     0x0030 
             RET      
-
-;subroutines
 
 MODESELECT:          
             LD      a,port 
@@ -51,24 +48,21 @@ MODESELECT:
             BIT     1,a 
             JP      nz,standardflash 
             BIT     2,a 
-            JP      nz,kitt 
-            BIT     3,a 
-            JP      nz,counter 
-            BIT     4,a 
             JP      nz,cylon 
+            BIT     3,a 
+            JP      nz,counter
             BIT     7,a 
-            JP      nz,exit 
+            JP      nz,exit
+            ; fall through if the selected mode is invalid
+            JP      nz, standardflash
             RET      
 
-SETMODE:             
-            LD      (mode),a 
-; some mode specific setup
-            BIT     2,a ; knight rider
-            JP      nz,kittsetup 
+SETMODE:    LD      (mode),a 
+            ; some mode specific setup
+            BIT     2,a ; cylon
+            JP      nz,cylonsetup 
             BIT     3,a ; counter
             JP      nz,countsetup 
-            BIT     4,a ; cylon
-            JP      nz,cylonsetup 
             RET      
 
 COUNTER:             
@@ -76,37 +70,36 @@ COUNTER:
             CALL    write 
             INC     a 
             LD      (last),a 
-            LD      bc,0x1000 
+            LD      bc,(cycles)
             CALL    delay 
             RET      
 
 COUNTSETUP: LD      a,1 
-            LD      (last),a 
+            LD      (last),a
+            LD      hl,0x1000
+            LD      (cycles),hl
             RET      
 
-CYLONSETUP:          
-            LD      a,(flags) 
-            SET     0,a 
-            LD      (flags),a 
-            LD      a,1 
+CYLONSETUP: LD      a,0
+            LD      (direction),a 
+            LD      a,0x1
             LD      (last),a 
             LD      hl,0x1000 
             LD      (cycles),hl 
             RET      
 
 
-CYLON:               
-            LD      a,(flags) 
+CYLON:      LD      a,(direction) 
             LD      d,0x10 ; counter for PCM loop
-            BIT     0,a 
+            LD      b, 1
+            AND     b
             JP      nz,cylonright 
-            JP      cylonleft 
 CYLONLEFT:  LD      a,(last) 
-            RLCA     
+            RLA     
             LD      (curr),a 
             JP      cylonpcm 
 CYLONRIGHT: LD      a,(last) 
-            RRCA     
+            RRA     
             LD      (curr),a 
             JP      cylonpcm 
 CYLONPCM:   LD      a,(curr) 
@@ -121,20 +114,25 @@ CYLONPCM:   LD      a,(curr)
             LD      bc,0x0400 
             CALL    delay 
             DEC     d 
-            JP      nz,cylonpcm 
-            LD      a,(curr) 
-            LD      (last),a 
+            JP      nz,cylonpcm
+            
 ; finally set the direction for next time
-            AND     $80 
-            JP      nz,nextright 
-            AND     $01 
-            JP      nz,nextleft 
-NEXTRIGHT:  LD      a,(flags) 
-            SET     0,a 
+            LD      a,(curr)
+            OR      a ; clear carry flag
+            PUSH    af
+            RLA
+            JP      c,nextright
+            POP     af
+            RRA
+            JP      c,nextleft
+            JP      cylondone
+NEXTRIGHT:  LD      a,1 
+            LD      (direction),a 
             JP      cylondone 
-NEXTLEFT:   LD      a,(flags) 
-            RES     0,a 
-CYLONDONE:  LD      (flags),a 
+NEXTLEFT:   LD      a,0 
+            LD      (direction),a 
+CYLONDONE:  LD      a,(curr)
+            LD      (last),a
             RET      
 
 STANDARDFLASH:       
@@ -143,20 +141,6 @@ STANDARDFLASH:
             LD      bc,(cycles) 
             CALL    delay 
             CALL    randomisedelay 
-            RET      
-
-KITT:                
-            LD      a,(last) 
-            RRCA     
-            LD      (last),a 
-            CALL    write 
-            LD      bc,0x3000 
-            CALL    delay 
-            RET      
-
-KITTSETUP:           
-            LD      a,3 
-            LD      (last),a 
             RET      
 
 FASTFLASH:           
