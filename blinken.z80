@@ -17,6 +17,7 @@ MODE:       DB      0x02
 ; 0x20:
 ; 0x40:
 ; 0x80: Exit to monitor
+;
 FLAGS:      DB      0x00 
 ; Flags include:
 ; 0x01: Current direction of chase (0=L, 1=R)
